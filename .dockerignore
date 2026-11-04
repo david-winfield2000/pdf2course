@@ -1,0 +1,8 @@
+**
+!Dockerfile
+!server.py
+!fetch_resources.py
+!pdf2lesson.py
+!static/**
+!hidden/handson-mlp/pyproject.toml
+!hidden/handson-mlp/uv.lock

@@ -1,5 +1,7 @@
 import asyncio
+import os
 import pathlib
+import queue
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -9,24 +11,35 @@ from jupyter_client import AsyncKernelManager
 from pydantic import BaseModel
 
 ROOT = pathlib.Path(__file__).parent
-LESSONS = ROOT / "lessons"
+LESSONS = ROOT / "hidden" / "course"
+BOOK = ROOT / "hidden" / "handson-mlp"  # code runs here: the book expects datasets/ in its repo
 CONN_FILE = ROOT / ".kernel" / "kernel.json"
 ENV = {"MPLBACKEND": "module://matplotlib_inline.backend_inline"}
 
 km: AsyncKernelManager
 kc = None
 lock = asyncio.Lock()  # one execution at a time
+DIED = "The kernel died, most likely out of memory. It has restarted, so all variables are gone."
+ran = set()  # code this kernel has run without error
+results = {}  # cell id → its latest outputs; like `ran`, this lives and dies with the kernel
+
+
+async def revive():
+    await km.restart_kernel(now=True)
+    await kc.wait_for_ready()
+    ran.clear()
+    results.clear()
 
 
 async def start_kernel():
     global km, kc
     CONN_FILE.parent.mkdir(exist_ok=True)
     km = AsyncKernelManager(connection_file=str(CONN_FILE))
-    await km.start_kernel(env={**__import__("os").environ, **ENV})
+    await km.start_kernel(cwd=str(BOOK), env={**os.environ, **ENV})
     kc = km.client()
     kc.start_channels()
     await kc.wait_for_ready()
-    print(f"\nTerminal access:  uv run jupyter console --existing {CONN_FILE}\n")
+    print(f"\nTerminal access:  docker exec -it pdf2course jupyter console --existing {CONN_FILE}\n")
 
 
 @asynccontextmanager
@@ -42,19 +55,29 @@ app = FastAPI(lifespan=lifespan)
 
 class Code(BaseModel):
     code: str
+    cell: str | None = None
 
 
 @app.post("/api/run")
 async def run(body: Code):
-    outputs = []
+    outputs, count = [], None
     async with lock:
         msg_id = kc.execute(body.code)
         while True:
-            msg = await kc.get_iopub_msg()
+            try:
+                msg = await kc.get_iopub_msg(timeout=1)
+            except queue.Empty:
+                if await km.is_alive():
+                    continue
+                await revive()
+                return {"outputs": [{"type": "error", "text": DIED}], "count": None,
+                        "result": "error", "kernel_died": True}
             if msg["parent_header"].get("msg_id") != msg_id:
                 continue  # output from another client (e.g. the terminal)
             t, c = msg["msg_type"], msg["content"]
-            if t == "stream":
+            if t == "execute_input":
+                count = c["execution_count"]
+            elif t == "stream":
                 outputs.append({"type": c["name"], "text": c["text"]})
             elif t in ("execute_result", "display_data"):
                 d = c["data"]
@@ -66,7 +89,18 @@ async def run(body: Code):
                 outputs.append({"type": "error", "text": "\n".join(c["traceback"])})
             elif t == "status" and c["execution_state"] == "idle":
                 break
-    return {"outputs": outputs}
+    failed = any(o["type"] == "error" for o in outputs)
+    if not failed:
+        ran.add(body.code.strip())
+    reply = {"outputs": outputs, "count": count, "result": "error" if failed else "ok"}
+    if body.cell:
+        results[body.cell] = reply
+    return reply
+
+
+@app.get("/api/state")
+def state():
+    return {"ran": sorted(ran), "results": results}
 
 
 class Complete(BaseModel):
@@ -91,11 +125,19 @@ async def complete(body: Complete):
             return {"from": body.pos, "matches": []}
 
 
+@app.post("/api/interrupt")
+async def interrupt():
+    if await km.is_alive():
+        await km.interrupt_kernel()  # no lock: /api/run holds it for as long as the code runs
+    return {"ok": True}
+
+
 @app.post("/api/restart")
 async def restart():
+    if await km.is_alive():
+        await km.interrupt_kernel()  # otherwise a long-running cell would hold the lock
     async with lock:
-        await km.restart_kernel(now=True)
-        await kc.wait_for_ready()
+        await revive()
     return {"ok": True}
 
 
