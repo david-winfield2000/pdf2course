@@ -10,6 +10,7 @@ dependencies = [
     "matplotlib>=3.11.2",
     "numpy>=2.5.4",
     "onnxruntime>=1.31.1",
+    "pandas>=3.1.1",
     "pymupdf>=2.1",
     "pymupdf4llm",
     "rapidocr>=3.10.0",

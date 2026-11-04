@@ -76,8 +76,7 @@ const read = (k) => { try { return localStorage[k]; } catch {} };
 async function openLesson(name) {
   lessonName = name;
   const md = await (await fetch(`/api/lessons/${name}`)).text();
-  const [intro, ...rest] = md.split(/^(?=## )/m);
-  sections = rest.map((s, i) => (i === 0 ? intro + s : s));
+  sections = md.split(/^---$/m).map((s) => s.trim());
   done = new Set(JSON.parse(read(`done:${name}`) || "[]"));
   save("lesson", name);
   show(Number(read(`pos:${name}`)) || 0);
