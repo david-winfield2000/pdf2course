@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>pdf2course</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg:#1e1e2e; --panel:#181825; --fg:#cdd6f4; --muted:#7f849c; --accent:#89b4fa; --line:#313244; }
+  * { box-sizing: border-box; }
+  body { margin:0; height:100vh; display:flex; flex-direction:column; background:var(--bg); color:var(--fg); font:15px/1.6 system-ui, sans-serif; }
+  header { display:flex; gap:12px; align-items:center; padding:8px 16px; background:var(--panel); border-bottom:1px solid var(--line); }
+  header select, button { background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:4px; padding:4px 10px; font:inherit; cursor:pointer; }
+  button.run { background:var(--accent); color:#11111b; border-color:var(--accent); font-weight:600; }
+  main { flex:1; display:grid; grid-template-columns: 1fr 1fr; min-height:0; }
+  #lesson { overflow:auto; padding:8px 28px 40px; border-right:1px solid var(--line); }
+  #lesson img { max-width:100%; background:#fff; border-radius:4px; }
+  #lesson pre { background:var(--panel); padding:12px; border-radius:6px; overflow:auto; position:relative; }
+  #lesson code { font-family: ui-monospace, Menlo, monospace; font-size:13px; }
+  #lesson blockquote { color:var(--muted); margin:0; padding-left:12px; border-left:3px solid var(--line); }
+  #lesson pre button { position:absolute; top:6px; right:6px; font-size:12px; padding:1px 8px; }
+  #right { display:flex; flex-direction:column; min-width:0; min-height:0; }
+  #editor { flex:1; min-height:0; overflow:auto; }
+  #editor .cm-editor { height:100%; }
+  #bar { display:flex; gap:8px; align-items:center; padding:6px 12px; background:var(--panel); border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+  #bar span { color:var(--muted); font-size:12px; margin-left:auto; }
+  #output { flex:1; min-height:0; overflow:auto; padding:10px 14px; background:var(--panel); }
+  #output pre { margin:0 0 8px; white-space:pre-wrap; font:13px/1.45 ui-monospace, Menlo, monospace; }
+  #output .stderr, #output .error { color:#f38ba8; }
+  #output img { max-width:100%; background:#fff; border-radius:4px; display:block; margin-bottom:8px; }
+  summary { cursor:pointer; color:var(--accent); }
+  #progress { flex:1; display:flex; gap:3px; }
+  #progress i { flex:1; height:10px; background:var(--line); border-radius:2px; cursor:pointer; }
+  #progress i.done { background:#a6e3a1; }
+  #progress i.current { outline:2px solid var(--accent); }
+  #label { color:var(--muted); font-size:13px; white-space:nowrap; }
+</style>
+</head>
+<body>
+<header>
+  <strong>pdf2course</strong>
+  <select id="picker"></select>
+  <div id="progress"></div>
+  <span id="label"></span>
+  <button id="prev">‹ Prev</button>
+  <button id="next">Next ›</button>
+</header>
+<main>
+  <section id="lesson"></section>
+  <section id="right">
+    <div id="editor"></div>
+    <div id="bar">
+      <button class="run" id="run">Run ▶</button>
+      <button id="restart">Restart kernel</button>
+      <span>⌘/Ctrl+Enter runs · Vim keys enabled</span>
+    </div>
+    <div id="output"></div>
+  </section>
+</main>
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>
