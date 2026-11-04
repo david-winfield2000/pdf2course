@@ -103,6 +103,17 @@ def state():
     return {"ran": sorted(ran), "results": results}
 
 
+class Clear(BaseModel):
+    cells: list[str]
+
+
+@app.post("/api/clear")
+def clear(body: Clear):
+    for c in body.cells:
+        results.pop(c, None)
+    return {"ok": True}
+
+
 class Complete(BaseModel):
     code: str
     pos: int

@@ -6,7 +6,7 @@ import { oneDark } from "@codemirror/theme-one-dark";
 import { Prec, EditorState } from "@codemirror/state";
 import { indentUnit } from "@codemirror/language";
 import { vim, getCM } from "@replit/codemirror-vim";
-import { autocompletion, acceptCompletion, startCompletion } from "@codemirror/autocomplete";
+import { autocompletion, acceptCompletion, startCompletion, moveCompletionSelection } from "@codemirror/autocomplete";
 import { indentMore } from "@codemirror/commands";
 
 const $ = (id) => document.getElementById(id);
@@ -121,7 +121,7 @@ const tab = (v) => {
   return indentMore(v);
 };
 
-const cells = () => notebooks.get(current);
+const cells = () => notebook(current);
 
 const selectCell = (cell) => cell && cell.dom.root.focus();
 
@@ -159,6 +159,8 @@ function cellKey(cell, e) {
     P: () => paste(index),
     a: () => selectCell(addCell("", index)),
     b: () => selectCell(addCell("", index + 1)),
+    O: () => selectCell(addCell("", index)),
+    o: () => selectCell(addCell("", index + 1)),
     i: () => cell.view.focus(),
   };
   if (e.key === "Enter") {
@@ -174,9 +176,9 @@ function cellKey(cell, e) {
   keys[e.key]();
 }
 
-function persist() {
-  const list = cells().map((c) => ({ id: c.id, code: c.view?.state.doc.toString() ?? c.code }));
-  save(`cells:${lessonName}:${current}`, JSON.stringify(list));
+function persist(page = current) {
+  const list = notebook(page).map((c) => ({ id: c.id, code: c.view?.state.doc.toString() ?? c.code }));
+  save(`cells:${lessonName}:${page}`, JSON.stringify(list));
 }
 
 function advance(cell) {
@@ -206,10 +208,14 @@ function mount(cell) {
       basicSetup,
       python(),
       oneDark,
-      autocompletion({ override: [kernelComplete], activateOnTyping: true }),
+      autocompletion({ override: [kernelComplete], activateOnTyping: true, defaultKeymap: false }),
       EditorView.updateListener.of((u) => { if (u.docChanged) persist(); }),
       Prec.highest(keymap.of([
         { key: "Tab", run: tab },
+        { key: "ArrowDown", run: moveCompletionSelection(true) },
+        { key: "ArrowUp", run: moveCompletionSelection(false) },
+        { key: "Ctrl-n", run: moveCompletionSelection(true) },
+        { key: "Ctrl-p", run: moveCompletionSelection(false) },
         { key: "Escape", run: (v) => { if (!isVimNormal(v)) return false; selectCell(cell); return true; } },
         { key: "Mod-Enter", run: () => { runCell(cell); return true; } },
         { key: "Shift-Enter", run: () => { runCell(cell); advance(cell); return true; } },
@@ -235,16 +241,20 @@ function addCell(code, index) {
   return cell;
 }
 
+function notebook(page) {
+  if (!notebooks.has(page)) {
+    const stored = JSON.parse(read(`cells:${lessonName}:${page}`) || "null");
+    const old = read(`code:${lessonName}:${page}`); // from the single-editor version
+    notebooks.set(page, (stored ?? (old ? [old] : [""])).map((c) => newCell(c.code ?? c, c.id)));
+  }
+  return notebooks.get(page);
+}
+
 function drawCells() {
   document.querySelectorAll(".cell").forEach((el) => el.remove());
   for (const list of notebooks.values()) for (const c of list) {
     if (c.view) { c.code = c.view.state.doc.toString(); c.view.destroy(); }
     c.view = c.dom = null;
-  }
-  if (!notebooks.has(current)) {
-    const stored = JSON.parse(read(`cells:${lessonName}:${current}`) || "null");
-    const old = read(`code:${lessonName}:${current}`); // from the single-editor version
-    notebooks.set(current, (stored ?? (old ? [old] : [""])).map((c) => newCell(c.code ?? c, c.id)));
   }
   for (const cell of cells()) $("cells").insertBefore(mount(cell), $("add"));
   persist(); // new cells need their ids saved, or a refresh would orphan their results
@@ -314,17 +324,38 @@ $("add").onclick = () => addCell("", cells().length).view.focus();
 
 // Sections build on each other, so run what the kernel missed on earlier pages
 $("catchup").onclick = () => {
-  const todo = blocks.slice(0, current).flat().filter((c) => !ran.has(c.trim()));
+  const todo = blocks.slice(0, current).flatMap((list, page) => list.map((code) => ({ page, code })))
+    .filter(({ code }) => !ran.has(code.trim()));
   enqueue(async () => {
-    for (const [i, code] of todo.entries()) {
+    for (const [i, { page, code }] of todo.entries()) {
       $("status").textContent = `Catching up: block ${i + 1} of ${todo.length}…`;
-      const { failed } = await execute(code);
+      // Run it in a cell on its own page, so it gets a number and an ok/error mark like any other
+      const list = notebook(page);
+      let cell = list.find((c) => (c.view?.state.doc.toString() ?? c.code).trim() === code.trim());
+      if (!cell) {
+        cell = list.length === 1 && !list[0].code.trim() ? list[0] : list[list.push(newCell("")) - 1];
+        cell.code = code;
+      }
+      const { outputs, count, result, failed } = await execute(code, cell.id);
+      saved[cell.id] = { outputs, count, result };
+      Object.assign(cell, saved[cell.id]);
+      persist(page);
       if (failed) {
-        $("status").dataset.keep = "Catch up stopped: " + clean(failed.text).trim().split("\n").at(-1);
+        $("status").dataset.keep = `Catch up stopped on page ${page + 1}: ` + clean(failed.text).trim().split("\n").at(-1);
         return;
       }
     }
   });
+};
+$("runall").onclick = () => cells().forEach(runCell);
+$("clear").onclick = () => {
+  const list = cells();
+  post("clear", { cells: list.map((c) => c.id) });
+  for (const c of list) {
+    delete saved[c.id];
+    c.count = c.result = c.outputs = undefined;
+    drawOutputs(c);
+  }
 };
 $("interrupt").onclick = () => post("interrupt");
 $("reset").onclick = async () => {
