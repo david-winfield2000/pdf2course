@@ -3,3 +3,5 @@
 __pycache__/
 frontend/node_modules/
 hidden/
+.watch.pid
+.watch.log

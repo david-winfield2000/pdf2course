@@ -392,18 +392,19 @@ $("add").onclick = () => addCell("", cells().length).view.focus();
 
 // Sections build on each other, so run what the kernel missed on earlier pages
 $("catchup").onclick = () => {
-  const todo = blocks.slice(0, current).flatMap((list, page) => list.map((code) => ({ page, code })))
+  const todo = blocks.slice(0, current).flatMap((list, page) => list.map((code, at) => ({ page, code, at })))
     .filter(({ code }) => !ran.has(code.trim()));
   const name = lessonName;
   enqueue(async () => {
-    for (const [i, { page, code }] of todo.entries()) {
+    for (const [i, { page, code, at }] of todo.entries()) {
       if (lessonName !== name) return; // the user moved on; don't mix this lesson's cells into another
       $("status").textContent = `Catching up: block ${i + 1} of ${todo.length}…`;
       // Run it in a cell on its own page, so it gets a number and an ok/error mark like any other
       const list = notebook(page);
       let cell = list.find((c) => (c.view?.state.doc.toString() ?? c.code).trim() === code.trim());
       if (!cell) {
-        cell = list.length === 1 && !list[0].code.trim() ? list[0] : list[list.push(newCell("")) - 1];
+        if (list.length === 1 && !list[0].code.trim()) cell = list[0];
+        else { cell = newCell(""); list.splice(Math.min(at, list.length), 0, cell); } // lesson order, not the end
         cell.code = code;
       }
       const { outputs, count, result, failed } = await execute(code, cell.id);

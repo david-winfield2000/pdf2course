@@ -47,10 +47,10 @@
   #right { display:flex; flex-direction:column; min-width:0; min-height:0; }
   #bar { display:flex; gap:8px; align-items:center; min-height:44px; padding:6px 12px; background:var(--panel); border-bottom:1px solid var(--line); }
   #status { color:var(--muted); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
-  #cells { flex:1; min-height:0; overflow:auto; padding:12px 12px 40px 0; }
-  .cell { margin-bottom:12px; }
+  #cells { flex:1; min-height:0; overflow:auto; padding:8px 6px 40px 0; }
+  .cell { margin-bottom:10px; position:relative; }
   .row { display:flex; align-items:flex-start; }
-  .prompt { flex:0 0 84px; display:flex; justify-content:flex-end; align-items:center; height:30px; white-space:nowrap; padding-right:8px; color:var(--muted); font:12px ui-monospace, Menlo, monospace; }
+  .prompt { flex:0 0 48px; display:flex; flex-direction:column; justify-content:flex-start; align-items:flex-start; gap:2px; padding:6px 0 0 6px; white-space:nowrap; padding-right:6px; color:var(--muted); font:11px ui-monospace, Menlo, monospace; }
   .input { flex:1; min-width:0; border:1px solid var(--line); border-radius:4px; overflow:hidden; }
   .cell { outline:none; }
   .cm-editor:not(.cm-focused) .cm-vimCursorLayer, .cm-editor:not(.cm-focused) .cm-cursorLayer { display:none; }
@@ -59,17 +59,18 @@
   .cell:focus .input { border-color:#a6e3a1; box-shadow:0 0 0 1px #a6e3a1; }
   .cell:focus .prompt, .prompt[data-result="ok"] { color:#a6e3a1; }
   .prompt[data-result="error"] { color:#f38ba8; }
-  .prompt::before { content:""; flex:0 0 14px; height:14px; margin-right:4px; mask:center/contain no-repeat; } /* always there, so the mark never shifts anything */
+  .prompt::before { content:""; flex:0 0 14px; width:14px; height:14px; order:1; mask:center/contain no-repeat; } /* always there, so the mark never shifts anything */
   .prompt[data-result="ok"]::before, .prompt[data-result="error"]::before { background:currentColor; }
   .prompt[data-result="ok"]::before { mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2.5 8.5l3.8 3.8 7.2-8' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
   .prompt[data-result="error"]::before { mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 3.5l9 9m0-9l-9 9' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
-  .actions { flex:0 0 auto; display:flex; gap:3px; margin-left:6px; }
+  .actions { position:absolute; top:3px; right:6px; z-index:5; display:flex; gap:3px; opacity:0; transition:opacity .12s; }
+  .cell:hover .actions, .cell:focus-within .actions, .cell:focus .actions { opacity:1; }
   .actions button { padding:2px 7px; font-size:12px; }
-  .outputs { margin:6px 0 0 84px; overflow:auto; max-height:480px; }
+  .outputs { margin:6px 0 0 48px; overflow:auto; max-height:480px; }
   .outputs pre { margin:0 0 6px; white-space:pre-wrap; font:13px/1.45 ui-monospace, Menlo, monospace; }
   .outputs .stderr, .outputs .error { color:#f38ba8; }
   .outputs img { max-width:100%; background:#fff; border-radius:4px; display:block; margin-bottom:6px; }
-  #add { margin-left:84px; }
+  #add { margin-left:48px; }
   summary { cursor:pointer; color:var(--accent); }
   #progress { flex:1; display:flex; gap:3px; }
   #progress i { flex:1; height:10px; background:var(--line); border-radius:2px; cursor:pointer; }
