@@ -38,16 +38,24 @@ let saved = {}; // cell id → results the kernel has for it
 let busy = 0, queue = Promise.resolve(), epoch = 0;
 let yanked = null, pendingKey = ""; // command mode: yanked cell, first key of dd/yy/gg
 
-// The book shows REPL sessions with their output; keep only what you would type
+// The book shows REPL sessions with their output; keep only what you would type, one cell per run of prompt lines
 function runnable(text) {
-  if (!/^>>> /m.test(text)) return text;
-  return text.split("\n").filter((l) => /^(>>>|\.\.\.)( |$)/.test(l)).map((l) => l.slice(4)).join("\n");
+  if (!/^>>> /m.test(text)) return [text];
+  const cells = [];
+  let open = false; // true while the previous line was a prompt line
+  for (const l of text.split("\n")) {
+    if (/^(>>>|\.\.\.)( |$)/.test(l)) {
+      if (open) cells[cells.length - 1] += "\n" + l.slice(4); else cells.push(l.slice(4));
+      open = true;
+    } else open = false; // output: the next prompt starts a new cell
+  }
+  return cells;
 }
 
 function codeBlocks(md) {
   const el = document.createElement("div");
   el.innerHTML = marked.parse(md);
-  return [...el.querySelectorAll("pre > code.language-python")].map((c) => runnable(c.textContent));
+  return [...el.querySelectorAll("pre > code.language-python")].flatMap((c) => runnable(c.textContent));
 }
 
 // ---- running code: one job at a time; an error drops whatever was queued behind it
@@ -350,7 +358,7 @@ function show(i) {
   el.querySelectorAll("pre > code.language-python").forEach((code) => {
     const btn = document.createElement("button");
     btn.textContent = "Load →";
-    btn.onclick = () => loadCode(runnable(code.textContent).trimEnd());
+    btn.onclick = () => runnable(code.textContent).forEach((c) => loadCode(c.trimEnd()));
     code.parentElement.append(btn);
   });
   el.scrollTop = 0;
