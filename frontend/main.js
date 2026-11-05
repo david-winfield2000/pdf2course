@@ -125,7 +125,7 @@ function runCell(cell) {
 async function kernelComplete(ctx) {
   const r = await post("complete", { code: ctx.state.doc.toString(), pos: ctx.pos });
   const { from, matches } = await r.json();
-  return matches.length ? { from, options: matches.map((label) => ({ label })) } : null;
+  return matches.length ? { from, options: matches.map((label) => ({ label })), validFor: /^\w*$/ } : null;
 }
 
 const tab = (v) => {
