@@ -9,13 +9,13 @@ if ! docker info >/dev/null 2>&1; then
     until docker info >/dev/null 2>&1; do sleep 2; done
 fi
 
-mkdir -p progress "$HOME/scikit_learn_data" "$HOME/.cache/huggingface"
+mkdir -p "$HOME/scikit_learn_data" "$HOME/.cache/huggingface"
 docker build -t pdf2course .
 docker rm -f pdf2course >/dev/null 2>&1 || true  # replace any previous run
 docker run --rm -d --name pdf2course \
     -p 127.0.0.1:8000:8000 \
     -v "$PWD/hidden:/app/hidden" \
-    -v "$PWD/progress:/app/progress" \
+    -v pdf2course-progress:/app/progress \
     -v "$PWD/static:/app/static" \
     -v "$HOME/scikit_learn_data:/root/scikit_learn_data" \
     -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \

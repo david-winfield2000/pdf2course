@@ -9,4 +9,4 @@
    ```
 
 The container downloads the datasets and online-only PDFs on startup (`fetch_resources.py`, safe to re-run).
-Lessons, images and book data stay in `hidden/` (gitignored). Your progress (pages done, position, cell code) is saved to `progress/progress.json`; commit it to keep it. After changing `frontend/main.js`, run `npm run build` in `frontend/`.
+Lessons, images and book data stay in `hidden/` (gitignored). Your progress (pages done, position, cell code) is saved in the `pdf2course-progress` Docker volume, so it survives restarts and rebuilds but is not in git. After changing `frontend/main.js`, run `npm run build` in `frontend/`.

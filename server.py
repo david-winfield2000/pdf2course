@@ -16,7 +16,7 @@ ROOT = pathlib.Path(__file__).parent
 LESSONS = ROOT / "hidden" / "course"
 BOOK = ROOT / "hidden" / "handson-mlp"  # code runs here: the book expects datasets/ in its repo
 CONN_FILE = ROOT / ".kernel" / "kernel.json"
-PROGRESS = ROOT / "progress" / "progress.json"  # tracked in git
+PROGRESS = ROOT / "progress" / "progress.json"  # in the pdf2course-progress Docker volume
 ENV = {"MPLBACKEND": "module://matplotlib_inline.backend_inline"}
 
 km: AsyncKernelManager
