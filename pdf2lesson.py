@@ -138,6 +138,9 @@ def callouts(page):
     for info in page.get_image_info(hashes=True):
         label = ICONS.get(info["digest"].hex()[:6])
         if label:
+            icon = OUT / "images" / f"icon-{label.lower()}.png"
+            if not icon.exists():
+                crop(page, pymupdf.Rect(info["bbox"]), f"icon-{label.lower()}")
             found.append((info["bbox"][1], label))
     return found
 
@@ -167,6 +170,10 @@ def inline(lines):
         last = runs[-1][1].rstrip()
         if i == len(lines) - 1:
             continue
+        nxt = lines[i + 1]["spans"][0] if i + 1 < len(lines) else None
+        if (nxt and style(nxt, body) == "code" and runs[-1][0] == "code"
+                and not runs[-1][1].endswith(" ") and not nxt["text"].startswith(" ")):
+            continue  # an identifier the PDF broke across lines without a hyphen
         if last.endswith(SOFT_HYPHEN):
             runs[-1][1] = last[:-1]
         elif last.endswith(("-", "—", "/")):
@@ -318,7 +325,8 @@ def render(item):
     elif item["x"] > 100 and not q:
         text = "     " + text  # continuation of a sub-item
     if item.get("label"):
-        text = f"**{item['label']}:** {text}"
+        label = item["label"]
+        text = f"![{label}](/hidden/course/images/icon-{label.lower()}.png) **{label}:** {text}"
     return "\n".join(q + l for l in text.split("\n"))
 
 
