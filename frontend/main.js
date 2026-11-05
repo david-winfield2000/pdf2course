@@ -10,13 +10,28 @@ import { autocompletion, acceptCompletion, startCompletion, moveCompletionSelect
 import { indentMore } from "@codemirror/commands";
 
 const $ = (id) => document.getElementById(id);
-const post = (path, body) => fetch(`/api/${path}`, { method: "POST",
+const post = (path, body) => fetch(`/api/${path}`, { method: "POST", keepalive: true,
   headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
-const save = (k, v) => { try { localStorage[k] = v; } catch {} };
-const read = (k) => { try { return localStorage[k]; } catch {} };
+
+// Progress lives in progress/progress.json on the server; writes are batched
+let progress = {}, unsaved = {}, saveTimer;
+const read = (k) => progress[k];
+const save = (k, v) => {
+  progress[k] = v;
+  unsaved[k] = v;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(flush, 500);
+};
+async function flush() {
+  clearTimeout(saveTimer);
+  if (!Object.keys(unsaved).length) return;
+  const changes = unsaved;
+  unsaved = {};
+  await post("progress", changes);
+}
 const clean = (text) => text.replace(/\x1b\[[0-9;]*m/g, "");
 
-let lessonName, sections = [], blocks = [], current = 0, done = new Set();
+let lessons = [], lessonName, sections = [], blocks = [], current = 0, done = new Set();
 let notebooks = new Map(); // page → cells; outputs live here, only the code is persisted
 let ran = new Set(); // code the kernel has already run
 let saved = {}; // cell id → results the kernel has for it
@@ -270,11 +285,55 @@ function loadCode(code) {
   cell.dom.root.scrollIntoView({ block: "nearest" });
 }
 
+// ---- dashboard: progress is whatever the lesson pages saved
+
+const pagesDone = (l) => JSON.parse(read(`done:${l.name}`) || "[]").filter((i) => i < l.pages).length;
+
+function chapterRow(l, done) {
+  const finished = done === l.pages;
+  const li = document.createElement("li");
+  li.innerHTML = `<a class="${finished ? "complete" : ""}"><span class="num"></span><span class="title"></span>
+    <span class="meter"><i></i></span><span class="state"></span></a>`;
+  li.firstChild.href = `#${l.name}`;
+  li.querySelector(".num").textContent = parseInt(l.name);
+  li.querySelector(".title").textContent = l.title;
+  li.querySelector(".meter i").style.width = `${100 * done / l.pages}%`;
+  li.querySelector(".state").textContent = finished ? "✓ Done" : `${done}/${l.pages}`;
+  return li;
+}
+
+function renderDashboard() {
+  const counts = lessons.map(pagesDone);
+  const sum = (list) => list.reduce((a, b) => a + b, 0);
+  const pages = sum(lessons.map((l) => l.pages)), done = sum(counts);
+  const percent = Math.round(100 * done / pages);
+  $("headline").textContent = `${lessons.filter((l, i) => counts[i] === l.pages).length} of ${lessons.length} chapters complete`;
+  $("subline").textContent = `${done} of ${pages} pages · ${percent}%`;
+  document.querySelector("#total i").style.width = `${100 * done / pages}%`;
+  const last = lessons.find((l) => l.name === read("lesson"));
+  const next = last ?? lessons[0];
+  $("resume").href = `#${next.name}`;
+  $("resume").textContent = last ? `Continue chapter ${parseInt(last.name)} ›` : "Start ›";
+  $("chapters").replaceChildren(...lessons.map((l, i) => chapterRow(l, counts[i])));
+}
+
+function route() {
+  const name = location.hash.slice(1);
+  const inLesson = lessons.some((l) => l.name === name);
+  $("dashboard").hidden = inLesson;
+  $("lessonbar").hidden = !inLesson;
+  document.querySelector("main").hidden = !inLesson;
+  if (!inLesson) return renderDashboard();
+  if (name !== lessonName) openLesson(name);
+}
+
 // ---- lesson pages
 
 async function openLesson(name) {
-  lessonName = name;
   const md = await (await fetch(`/api/lessons/${name}`)).text();
+  if (location.hash.slice(1) !== name) return; // already gone elsewhere
+  for (const list of notebooks.values()) for (const c of list) c.view?.destroy();
+  lessonName = name;
   sections = md.split(/^---$/m).map((s) => s.trim());
   blocks = sections.map(codeBlocks);
   notebooks = new Map();
@@ -317,7 +376,8 @@ function renderProgress() {
 $("next").onclick = () => {
   done.add(current);
   save(`done:${lessonName}`, JSON.stringify([...done]));
-  show(current + 1);
+  if (current === sections.length - 1) location.hash = "";
+  else show(current + 1);
 };
 $("prev").onclick = () => show(current - 1);
 $("add").onclick = () => addCell("", cells().length).view.focus();
@@ -326,8 +386,10 @@ $("add").onclick = () => addCell("", cells().length).view.focus();
 $("catchup").onclick = () => {
   const todo = blocks.slice(0, current).flatMap((list, page) => list.map((code) => ({ page, code })))
     .filter(({ code }) => !ran.has(code.trim()));
+  const name = lessonName;
   enqueue(async () => {
     for (const [i, { page, code }] of todo.entries()) {
+      if (lessonName !== name) return; // the user moved on; don't mix this lesson's cells into another
       $("status").textContent = `Catching up: block ${i + 1} of ${todo.length}…`;
       // Run it in a cell on its own page, so it gets a number and an ok/error mark like any other
       const list = notebook(page);
@@ -360,9 +422,10 @@ $("clear").onclick = () => {
 $("interrupt").onclick = () => post("interrupt");
 $("reset").onclick = async () => {
   if (!confirm(`Clear all progress on ${lessonName}, including the code in your cells? This also restarts the kernel.`)) return;
-  for (const key of Object.keys(localStorage)) {
-    if (key.endsWith(`:${lessonName}`) || key.includes(`:${lessonName}:`)) localStorage.removeItem(key);
+  for (const key of Object.keys(progress)) {
+    if (key.endsWith(`:${lessonName}`) || key.includes(`:${lessonName}:`)) save(key, null);
   }
+  await flush();
   epoch++;
   await post("restart");
   location.reload();
@@ -375,12 +438,14 @@ $("restart").onclick = async () => {
   controls();
 };
 
+window.addEventListener("pagehide", flush);
+progress = await (await fetch("/api/progress")).json();
+if (!Object.keys(progress).length) {
+  for (const key of Object.keys(localStorage)) save(key, localStorage[key]); // import from before the file existed
+}
 const state = await (await fetch("/api/state")).json();
 ran = new Set(state.ran);
 saved = state.results;
-const names = await (await fetch("/api/lessons")).json();
-$("picker").innerHTML = names.map((n) => `<option>${n}</option>`).join("");
-$("picker").onchange = (e) => openLesson(e.target.value);
-const start = names.includes(read("lesson")) ? read("lesson") : names[0];
-$("picker").value = start;
-openLesson(start);
+lessons = await (await fetch("/api/lessons")).json();
+window.onhashchange = route;
+route();

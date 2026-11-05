@@ -1,0 +1,12 @@
+{
+ "cells:01-the-machine-learning-landscape:0": "[{\"id\":\"w0d4jauho\",\"code\":\"\"}]",
+ "cells:02-end-to-end-machine-learning-project:0": "[{\"id\":\"h1bz648jwz5\",\"code\":\"\"}]",
+ "cells:03-classification:0": "[{\"id\":\"odna9c3h8ld\",\"code\":\"\"}]",
+ "cells:03-classification:1": "[{\"id\":\"tw5saqisnq\",\"code\":\"from sklearn.datasets import fetch_openml\\n\\nmnist = fetch_openml('mnist_784', as_frame=False)\"},{\"id\":\"fxk5g7gatow\",\"code\":\"X, y = mnist.data, mnist.target\"},{\"id\":\"bayb0k0nl6m\",\"code\":\"X.shape\"},{\"id\":\"bu9tjhgm7a\",\"code\":\"y.shape\"},{\"id\":\"6eztso1z0xp\",\"code\":\"import matplotlib.pylab as plt\\n\\ndef plot_digit(image_data):\\n    image = image_data.reshape(28, 28)\\n    plt.imshow(image, cmap=\\\"binary\\\")\\n    plt.axis(\\\"off\\\")\\n\\nsome_digit = X[0]\\nplot_digit(some_digit) \\nplt.show()\"},{\"id\":\"5fjbifxma99\",\"code\":\"y[0]\"},{\"id\":\"qzizri3jk8k\",\"code\":\"# Split into train and test data\\nX_train, X_test, y_train, y_test = X[:60000], X[60000:], y[:60000], y[60000:]\"}]",
+ "cells:03-classification:2": "[{\"id\":\"2yhptw818sk\",\"code\":\"\"}]",
+ "done:03-classification": "[0,1]",
+ "lesson": "03-classification",
+ "pos:01-the-machine-learning-landscape": "0",
+ "pos:02-end-to-end-machine-learning-project": "0",
+ "pos:03-classification": 2
+}

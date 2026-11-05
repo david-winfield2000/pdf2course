@@ -1,7 +1,9 @@
 import asyncio
+import json
 import os
 import pathlib
 import queue
+import re
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -14,6 +16,7 @@ ROOT = pathlib.Path(__file__).parent
 LESSONS = ROOT / "hidden" / "course"
 BOOK = ROOT / "hidden" / "handson-mlp"  # code runs here: the book expects datasets/ in its repo
 CONN_FILE = ROOT / ".kernel" / "kernel.json"
+PROGRESS = ROOT / "progress" / "progress.json"  # tracked in git
 ENV = {"MPLBACKEND": "module://matplotlib_inline.backend_inline"}
 
 km: AsyncKernelManager
@@ -152,9 +155,32 @@ async def restart():
     return {"ok": True}
 
 
+def load_progress():
+    return json.loads(PROGRESS.read_text()) if PROGRESS.exists() else {}
+
+
+@app.get("/api/progress")
+def get_progress():
+    return load_progress()
+
+
+@app.post("/api/progress")
+async def update_progress(changes: dict):  # async, so writes never overlap; a null value deletes the key
+    progress = load_progress() | changes
+    progress = {k: v for k, v in progress.items() if v is not None}
+    tmp = PROGRESS.with_suffix(".tmp")
+    tmp.write_text(json.dumps(progress, indent=1, sort_keys=True) + "\n")
+    tmp.replace(PROGRESS)  # a crash mid-write can't corrupt the file
+    return {"ok": True}
+
+
 @app.get("/api/lessons")
 def lessons():
-    return sorted(p.stem for p in LESSONS.glob("*.md"))
+    def summary(path):
+        text = path.read_text()
+        return {"name": path.stem, "title": text.split("\n", 1)[0].lstrip("# "),
+                "pages": len(re.findall(r"^---$", text, re.M)) + 1}
+    return [summary(p) for p in sorted(LESSONS.glob("*.md"))]
 
 
 @app.get("/api/lessons/{name}")

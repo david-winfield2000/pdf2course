@@ -53,7 +53,7 @@ def page_lines(page):
             lines.append(line)
             seen.add((round(y), text_of(line).strip()))
     lines = [l for l in lines if not (
-        re.fullmatch(r"(\d+|[a-z])\.", text_of(l).strip())
+        re.fullmatch(r"(\d+|[a-z])\.|•", text_of(l).strip())
         and any(y == round(l["bbox"][1]) and t != text_of(l).strip() and t.startswith(text_of(l).strip())
                 for y, t in seen))]
     return sorted(lines, key=lambda l: (round(l["bbox"][1]), l["bbox"][0]))
@@ -75,11 +75,15 @@ def figures(page, lines, tag):
             continue
         top = line["bbox"][1]
         above = [c for c in clusters if -8 < top - c.y1 < 12]
+        if not above:  # the drawing is lost in a page-wide frame, so go by the picture
+            above = [i + (-3, -3, 3, 3) for i in images if -8 < top - i.y1 < 12]
+            clusters = [c for c in clusters if not any(c.contains(a) for a in above)]
         if not above:
             print(f"  no figure found above: {text_of(line)[:50]}", file=sys.stderr)
             continue
         rect = above[0]
-        clusters.remove(rect)
+        if rect in clusters:
+            clusters.remove(rect)
         inside = [i for i in images if rect.contains(i)]
         if len(inside) == 1:  # the cluster is a page-wide frame; keep just the picture
             rect = inside[0] + (-3, -3, 3, 3)
@@ -90,14 +94,34 @@ def figures(page, lines, tag):
     return items, cut, clusters
 
 
+def tables(page, lines, tag):
+    """Crop each captioned table: extracting the text loses spacing and the drawn ratings."""
+    captions = [l for l in lines if is_caption(l, "Table")]
+    found = page.find_tables().tables if captions else []
+    items, cut = [], []
+    for table in found:
+        rect = pymupdf.Rect(table.bbox) + (-4, -4, 4, 4)
+        above = [l for l in captions if l["bbox"][1] < rect.y0]
+        if not above:
+            continue
+        name = re.match(r"Table (\S+?)\.", text_of(above[-1]))[1]
+        items.append({"kind": "image", "y": rect.y0, "src": crop(page, rect, f"{tag}-table-{name}"),
+                      "alt": f"Table {name}"})
+        cut.append(rect)
+    return items, cut
+
+
 def equations(page, lines, tag):
     items, cut = [], []
     for i, line in enumerate(lines):
         if not is_caption(line, "Equation"):
             continue
         rect = pymupdf.Rect()
+        boxes = [top for top, _ in callouts(page) if top > line["bbox"][1]]
         for other in lines[i + 1:]:
             if other["bbox"][0] < 75 or other["spans"][0]["size"] > 10.2:
+                break
+            if boxes and other["bbox"][1] > boxes[0] - 6:
                 break
             rect |= pymupdf.Rect(other["bbox"])
         name = re.match(r"Equation (\S+?)\.", text_of(line))[1]
@@ -169,8 +193,9 @@ def parse_page(page, tag):
     lines = page_lines(page)
     items, cut, boxes = figures(page, lines, tag)
     eq_items, eq_cut = equations(page, lines, tag)
-    items += eq_items
-    cut += eq_cut
+    table_items, table_cut = tables(page, lines, tag)
+    items += eq_items + table_items
+    cut += eq_cut + table_cut
     labels = callouts(page)
     footnotes, in_note, para, code = [], False, None, None
 
@@ -194,7 +219,10 @@ def parse_page(page, tag):
         if "Myriad" in name:
             flush()
             if size >= 25:
-                items.append({"kind": "h", "level": 1, "text": raw.strip(), "y": y})
+                if items and items[-1].get("level") == 1:  # a title wrapped onto two lines
+                    items[-1]["text"] += " " + raw.strip()
+                else:
+                    items.append({"kind": "h", "level": 1, "text": raw.strip(), "y": y})
             elif 16.5 <= size < 18:
                 continue  # "CHAPTER 3" label
             else:
@@ -216,6 +244,9 @@ def parse_page(page, tag):
         if is_code(line):
             if para:
                 flush()
+            if code and abs(y - code["bottom"]) < 1:  # one line the PDF stores in two pieces
+                code["lines"][-1] += raw.rstrip()
+                continue
             if code is None:
                 code = {"kind": "code", "lines": [], "y": y, "quoted": quoted, "bottom": y}
             elif y - code["bottom"] > 15:
@@ -331,7 +362,7 @@ def main():
     toc = doc.get_toc()
     index = next(i for i, t in enumerate(toc) if t[1].startswith(wanted + ".") or t[1].startswith(wanted + " "))
     level, title, start = toc[index]
-    end = next(t[2] for t in toc[index + 1:] if t[0] <= level) - 1
+    end = next((t[2] for t in toc[index + 1:] if t[0] <= level), len(doc) + 1) - 1
     number = int(re.search(r"\d+", title)[0])
     tag = f"{number:02d}"
 
