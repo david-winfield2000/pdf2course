@@ -457,3 +457,24 @@ saved = state.results;
 lessons = await (await fetch("/api/lessons")).json();
 window.onhashchange = route;
 route();
+
+// Draggable divider between lesson and notebook
+{
+  const div = $("divider"), main = document.querySelector("main");
+  div.onpointerdown = (e) => {
+    div.setPointerCapture(e.pointerId);
+    div.classList.add("drag");
+    document.body.classList.add("dragging");
+  };
+  div.onpointermove = (e) => {
+    if (!div.hasPointerCapture(e.pointerId)) return;
+    const r = main.getBoundingClientRect();
+    const x = Math.min(Math.max(e.clientX - r.left, 250), r.width - 250);
+    main.style.setProperty("--left", `${x}px`);
+  };
+  div.ondblclick = () => main.style.removeProperty("--left");
+  div.onpointerup = () => {
+    div.classList.remove("drag");
+    document.body.classList.remove("dragging");
+  };
+}
