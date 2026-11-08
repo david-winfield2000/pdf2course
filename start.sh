@@ -24,3 +24,7 @@ docker run --rm -d --name pdf2course \
 if [ -f .watch.pid ]; then kill "$(cat .watch.pid)" 2>/dev/null || true; fi
 (cd frontend && nohup node_modules/.bin/esbuild main.js --bundle --minify --format=esm --outfile=../static/app.js --watch=forever >../.watch.log 2>&1 & echo $! >../.watch.pid)
 echo "Running at http://127.0.0.1:8000 (logs: docker logs -f pdf2course, stop: ./stop.sh)"
+
+sleep 5
+
+open "http://127.0.0.1:8000" 

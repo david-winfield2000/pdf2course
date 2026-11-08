@@ -165,25 +165,37 @@ function removeCell(cell) {
 }
 
 // Command mode: Esc from vim normal mode selects the cell itself, as in Jupyter
+let lastChange = "";
 function cellKey(cell, e) {
   const list = cells();
   const index = list.indexOf(cell);
   const code = () => cell.view.state.doc.toString();
   const twice = (key) => { const hit = pendingKey === key; pendingKey = hit ? "" : key; return hit; };
   const paste = (at) => { if (yanked !== null) selectCell(addCell(yanked, at)); };
-  const keys = {
-    j: () => selectCell(list[index + 1]),
-    k: () => selectCell(list[index - 1]),
-    G: () => selectCell(list.at(-1)),
-    g: () => { if (twice("g")) selectCell(list[0]); },
-    y: () => { if (twice("y")) yanked = code(); },
-    d: () => { if (twice("d")) { yanked = code(); selectCell(removeCell(cell)); } },
+  const changes = {
+    d: () => { yanked = code(); selectCell(removeCell(cell)); },
     p: () => paste(index + 1),
     P: () => paste(index),
     a: () => selectCell(addCell("", index)),
     b: () => selectCell(addCell("", index + 1)),
     O: () => selectCell(addCell("", index)),
     o: () => selectCell(addCell("", index + 1)),
+  };
+  const change = (name) => { lastChange = name; changes[name](); };
+  const keys = {
+    j: () => selectCell(list[index + 1]),
+    k: () => selectCell(list[index - 1]),
+    G: () => selectCell(list.at(-1)),
+    g: () => { if (twice("g")) selectCell(list[0]); },
+    y: () => { if (twice("y")) yanked = code(); },
+    d: () => { if (twice("d")) change("d"); },
+    p: () => change("p"),
+    P: () => change("P"),
+    a: () => change("a"),
+    b: () => change("b"),
+    O: () => change("O"),
+    o: () => change("o"),
+    ".": () => { if (lastChange) changes[lastChange](); },
     i: () => cell.view.focus(),
   };
   if (e.key === "Enter") {
